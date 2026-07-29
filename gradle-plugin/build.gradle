@@ -106,7 +106,7 @@ afterEvaluate {
      */
     tasks.withType(AbstractPublishToMaven).matching { task ->
         task.publication.name == 'pluginMaven' ||
-            task.name =~ /^publish(.*)PluginMarkerMavenPublicationTo(GithubRepository|MavenLocal|SonatypeRepository)$/
+            task.name =~ /^publish(.*)PluginMarkerMavenPublicationTo(WcpeRepository|MavenLocal|SonatypeRepository)$/
     } each {task ->
         task.enabled = false
     }

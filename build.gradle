@@ -44,11 +44,11 @@ allprojects { Project project ->
                 publishing {
                     repositories {
                         maven {
-                            name = 'Github'
-                            url = uri('https://maven.pkg.github.com/guardsquare/proguard')
+                            name = 'Wcpe'
+                            url = uri('https://maven.wcpe.top/repository/maven-releases/')
                             credentials {
-                                username = project.findProperty('PROGUARD_GITHUB_USERNAME')
-                                password = project.findProperty('PROGUARD_GITHUB_TOKEN')
+                                username = project.findProperty('WCPE_MAVEN_USERNAME')
+                                password = project.findProperty('WCPE_MAVEN_PASSWORD')
                             }
                         }
                     }

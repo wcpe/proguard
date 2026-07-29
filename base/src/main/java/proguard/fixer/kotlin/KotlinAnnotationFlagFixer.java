@@ -71,8 +71,11 @@ implements   KotlinMetadataVisitor,
         kotlinClassKindMetadata.constructorsAccept(                     clazz, this);
         kotlinClassKindMetadata.inlineClassUnderlyingPropertyTypeAccept(clazz, this);
 
-        kotlinClassKindMetadata.referencedClass.attributesAccept(annotationCounter.reset());
-        kotlinClassKindMetadata.flags.hasAnnotations = annotationCounter.getCount() > 0;
+        if (kotlinClassKindMetadata.referencedClass instanceof ProgramClass)
+        {
+            kotlinClassKindMetadata.referencedClass.attributesAccept(annotationCounter.reset());
+            kotlinClassKindMetadata.flags.hasAnnotations = annotationCounter.getCount() > 0;
+        }
     }
 
     @Override
