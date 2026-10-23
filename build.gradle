@@ -15,6 +15,12 @@ allprojects {
     version = proguardVersion
     repositories {
         mavenLocal()
+        mavenCentral()
+        // WCPE 制品库：本仓 fork 依赖（proguard-core 的 -wcpe.N 版本）发布在这里，
+        maven {
+            // 该库对匿名读开放；凭据仅在发布时用，解析不需要。
+            url = uri('https://repo.wcpe.top/repository/maven-public/')
+        }
     }
 }
 
