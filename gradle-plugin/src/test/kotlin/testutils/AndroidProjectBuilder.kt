@@ -107,6 +107,7 @@ class AndroidProject(
     @Language("Groovy") val buildDotGradle: String = defaultRootBuildDotGradle,
     @Language("Groovy") private val overrideSettingsDotGradle: String? = null,
     private val gradleDotProperties: String? = null,
+    private val environment: Map<String, String> = System.getenv(),
 ) : AutoCloseable {
     val rootDir: File = createTempDirectory("proguard-gradle").toFile()
     private val modules = mutableListOf<Module>()
@@ -132,6 +133,9 @@ class AndroidProject(
         if (gradleDotProperties != null) {
             File(rootDir, "gradle.properties").writeText(gradleDotProperties)
         }
+        androidSdkDirectory(environment)?.let { sdkDir ->
+            File(rootDir, "local.properties").writeText("sdk.dir=${escapeSdkDirectory(sdkDir)}\n")
+        }
 
         for (module in modules) {
             val moduleDir = File(rootDir, module.name)
@@ -149,6 +153,14 @@ class AndroidProject(
         if (!rootDir.deleteRecursively()) throw Exception("Could not delete root dir '$rootDir'")
     }
 }
+
+internal fun androidSdkDirectory(environment: Map<String, String>): File? =
+    listOfNotNull(environment["ANDROID_SDK_ROOT"], environment["ANDROID_HOME"])
+        .firstOrNull { path -> path.isNotBlank() && File(path).isDirectory }
+        ?.let(::File)
+
+internal fun escapeSdkDirectory(sdkDir: File): String =
+    sdkDir.path.replace("\\", "\\\\").replace(":", "\\:")
 
 fun defaultSettingsDotGradle(modules: List<Module>) = modules.joinToString(prefix = "include ") { "'${it.projectPath}'" }
 

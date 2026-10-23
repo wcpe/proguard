@@ -8,3 +8,4 @@ local.properties
 docs/html
 .kotlin
 .DS_Store
+/.tmp/

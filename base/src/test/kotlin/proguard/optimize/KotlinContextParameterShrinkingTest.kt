@@ -73,6 +73,10 @@ class KotlinContextParameterShrinkingTest : StringSpec({
                 "Test.kt",
                 """
                 class Unused {
+                    init {
+                        println("unused")
+                    }
+
                     fun info(message: String) {
                       println(message)
                     }
@@ -83,7 +87,7 @@ class KotlinContextParameterShrinkingTest : StringSpec({
                 }
 
                 context(used: Used, unused: Unused)
-                fun String.foo(message: String = "test") {
+                fun String.foo(message: String = "test", unusedLong: Long = 0L) {
                     println(this) // use the String receiver
                     used.bar(message) 
                 } 
@@ -295,6 +299,87 @@ class KotlinContextParameterShrinkingTest : StringSpec({
         kotlinMetadata shouldContain "[CTPA] unused"
         kotlinMetadata shouldContain "[CTPA] used"
         verifyParameters(testKt, "get*,set*")
+    }
+
+    "Given a Kotlin property with ContextParameters and an explicit getter" {
+        val (programClassPool, libraryClassPool) = ClassPoolBuilder.fromSource(
+            KotlinSource(
+                "Test.kt",
+                """
+                class Unused1
+                class Unused2
+
+                class ClassWithProperty {
+                    context(unused1: Unused1, unused2: Unused2)
+                    val property: String
+                        get() = "foo"
+                }
+
+                fun main() {
+                  with (Unused2()) { with (Unused1()) { ClassWithProperty().property } }
+                }
+                """.trimIndent(),
+            ),
+            kotlincArguments = listOf(
+                // Disable generation of instrinsics null checks
+                // In real world use-cases, -assumenosideeffects might be used
+                "-Xno-param-assertions",
+            ),
+        )
+
+        val classWithProperty = programClassPool.getClass("ClassWithProperty")
+
+        optimize(programClassPool, libraryClassPool)
+
+        val kotlinMetadata = classWithProperty.kotlinMetadataAsString
+        kotlinMetadata shouldContain "[CTPA] unused1"
+        kotlinMetadata shouldContain "[CTPA] unused2"
+        verifyParameters(classWithProperty, "get*", p1 = "LUnused1;", p2 = "LUnused2;")
+    }
+
+    "Given a Kotlin factory function with ContextParameters" {
+        val (programClassPool, libraryClassPool) = ClassPoolBuilder.fromSource(
+            KotlinSource(
+                "Test.kt",
+                """
+                class Unused {
+                    fun info(message: String) {
+                      println(message)
+                    }
+                }
+
+                class Used {
+                    fun barfo(message: String) { }
+                }
+
+                class MyClass
+
+                context(used: Used, unused: Unused)
+                fun createMyClass(): MyClass {
+                    used.barfo("test")
+                    return MyClass()
+                }
+
+                fun main() {
+                  with (Unused()) { with (Used()) { createMyClass() } }
+                }
+                """.trimIndent(),
+            ),
+            kotlincArguments = listOf(
+                // Disable generation of instrinsics null checks
+                // In real world use-cases, -assumenosideeffects might be used
+                "-Xno-param-assertions",
+            ),
+        )
+
+        optimize(programClassPool, libraryClassPool)
+
+        val testKt = programClassPool.getClass("TestKt")
+        val kotlinMetadata = testKt.kotlinMetadataAsString
+        kotlinMetadata shouldContain "[CTPA] unused"
+        kotlinMetadata shouldContain "[CTPA] used"
+
+        verifyParameters(testKt, "createMyClass*")
     }
 })
 

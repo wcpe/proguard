@@ -40,6 +40,7 @@ dependencies {
         exclude module: 'proguard-base'
     }
     testImplementation(libs.bundles.kotest)
+    testImplementation(libs.kotlin.stdlib)
     testImplementation(libs.mockk)
     testImplementation(libs.commons.io)
     fatJar project(":base")
@@ -70,6 +71,24 @@ tasks.withType(Test).configureEach {
     systemProperty "local.repo", localRepo.toURI()
     systemProperty "proguard.version", version
     systemProperty "agp.version", libs.versions.agp.get()
+}
+
+def gradlePluginIntegrationTest = tasks.register('gradlePluginIntegrationTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include 'proguard/gradle/GradlePluginIntegrationTest.class'
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+    useJUnitPlatform()
+}
+
+tasks.named('test', Test) {
+    exclude 'proguard/gradle/GradlePluginIntegrationTest.class'
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+    dependsOn gradlePluginIntegrationTest
 }
 
 sourceSets.test {

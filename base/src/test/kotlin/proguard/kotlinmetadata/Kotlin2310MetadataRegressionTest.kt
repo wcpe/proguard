@@ -46,8 +46,10 @@ import java.nio.file.Paths
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 
-interface Metadata2310Contract {
+interface Metadata2310Contract : AutoCloseable {
     fun describe(): KType = typeOf<KType>()
+
+    override fun close() = Unit
 }
 
 class Metadata2310Carrier : Metadata2310Contract
@@ -64,8 +66,6 @@ class Kotlin2310MetadataRegressionTest : FreeSpec({
 
 private object Kotlin2310MetadataRegressionTestSupport {
     fun runRegression() {
-        KotlinVersion.CURRENT.toString() shouldBe KOTLIN_VERSION
-
         val classesRoot = compiledTestClassesRoot()
         classesRoot.toString().replace('\\', '/') shouldContain "build/classes/kotlin/test"
 
@@ -85,6 +85,7 @@ private object Kotlin2310MetadataRegressionTestSupport {
         initializeModuleReferences(resourceFilePool, programClassPool, libraryClassPool)
         assertFileFacadeModuleReference(fileFacadeClass, resourceFilePool)
         assertDefaultImplsReference(contractClass, defaultImplsClass, programClassPool)
+        assertAutoCloseableTypeAliasReference(contractClass, AUTOCLOSEABLE_TYPE_ALIAS_NAME)
         assertLibraryTypesRemainLibraryInput(programClassPool, libraryClassPool)
         assertNoUnresolvedKotlinTypeReferences(programClassPool)
 
@@ -96,6 +97,8 @@ private object Kotlin2310MetadataRegressionTestSupport {
         Obfuscator(configuration).execute(appView)
         NameObfuscationReferenceFixer(configuration).execute(appView)
 
+        assertAutoCloseableTypeAliasReference(contractClass, AUTOCLOSEABLE_FIXED_TYPE_ALIAS_NAME)
+
         shouldNotThrowAny {
             KotlinMetadataVerifier(configuration).execute(appView)
         }
@@ -105,12 +108,17 @@ private object Kotlin2310MetadataRegressionTestSupport {
         assertLibraryTypesRemainLibraryInput(programClassPool, libraryClassPool)
     }
 
-    private const val KOTLIN_VERSION = "2.3.10"
+    // 当前构建使用的 Kotlin 版本对应的元数据版本（随 Kotlin 升级同步更新）
+    private val KOTLIN_METADATA_VERSION = listOf(2, 4, 0)
     private const val FIXTURE_PACKAGE = "proguard/kotlinmetadata"
     private const val FILE_FACADE_CLASS_NAME = "$FIXTURE_PACKAGE/Kotlin2310MetadataRegressionTestKt"
     private const val CONTRACT_CLASS_NAME = "$FIXTURE_PACKAGE/Metadata2310Contract"
-    private const val DEFAULT_IMPLS_CLASS_NAME = "$CONTRACT_CLASS_NAME\$DefaultImpls"
+    private const val DEFAULT_IMPLS_SUFFIX = "\$DefaultImpls"
+    private const val DEFAULT_IMPLS_CLASS_NAME = "$CONTRACT_CLASS_NAME$DEFAULT_IMPLS_SUFFIX"
     private const val CARRIER_CLASS_NAME = "$FIXTURE_PACKAGE/Metadata2310Carrier"
+    private const val AUTOCLOSEABLE_TYPE_ALIAS_NAME = "kotlin/AutoCloseable"
+    private const val AUTOCLOSEABLE_FIXED_TYPE_ALIAS_NAME = "kotlin/jdk7/AutoCloseable"
+    private const val AUTOCLOSEABLE_TYPE_ALIAS_CLASS_NAME = "kotlin/jdk7/AutoCloseableKt"
 
     private val fixtureClassNames =
         listOf(
@@ -141,6 +149,7 @@ private object Kotlin2310MetadataRegressionTestSupport {
     private fun readLibraryClasses(programClassPool: ClassPool): ClassPool =
         ClassPoolBuilder.libraryClassPool.also { libraryClassPool ->
             readMissingLibraryClasses(libraryClassPool)
+            libraryClassPool.getClass(AUTOCLOSEABLE_TYPE_ALIAS_CLASS_NAME) shouldNotBe null
             stripLibraryKotlinMetadata(libraryClassPool)
             ClassPoolBuilder.initialize(programClassPool, libraryClassPool, containsKotlinCode = true)
         }
@@ -162,7 +171,9 @@ private object Kotlin2310MetadataRegressionTestSupport {
                 override fun visitAnyClass(clazz: Clazz) = Unit
 
                 override fun visitLibraryClass(libraryClass: LibraryClass) {
-                    libraryClass.kotlinMetadata = null
+                    if (libraryClass.getName() != AUTOCLOSEABLE_TYPE_ALIAS_CLASS_NAME) {
+                        libraryClass.kotlinMetadata = null
+                    }
                 }
             },
         )
@@ -261,13 +272,45 @@ private object Kotlin2310MetadataRegressionTestSupport {
                     kotlinClassKindMetadata: KotlinClassKindMetadata,
                 ) {
                     contractVisited = true
-                    kotlinClassKindMetadata.referencedDefaultImplsClass shouldBe defaultImplsClass
+                    kotlinClassKindMetadata.mv.toList() shouldBe KOTLIN_METADATA_VERSION
+                    val actualDefaultImplsClass = kotlinClassKindMetadata.referencedDefaultImplsClass
+                    actualDefaultImplsClass shouldBe defaultImplsClass
+                    actualDefaultImplsClass?.getName()?.endsWith(DEFAULT_IMPLS_SUFFIX) shouldBe true
                 }
             },
         )
 
         contractVisited shouldBe true
         programClassPool.contains(defaultImplsClass) shouldBe true
+    }
+
+    private fun assertAutoCloseableTypeAliasReference(
+        contractClass: Clazz,
+        expectedAliasName: String,
+    ) {
+        val aliasTypes = mutableListOf<KotlinTypeMetadata>()
+
+        contractClass.kotlinMetadataAccept(
+            AllTypeVisitor(
+                object : KotlinTypeVisitor {
+                    override fun visitAnyType(
+                        clazz: Clazz,
+                        kotlinTypeMetadata: KotlinTypeMetadata,
+                    ) {
+                        if (kotlinTypeMetadata.aliasName == expectedAliasName) {
+                            aliasTypes += kotlinTypeMetadata
+                        }
+                    }
+                },
+            ),
+        )
+
+        val aliasType = aliasTypes.singleOrNull()
+        aliasType shouldNotBe null
+        val referencedTypeAlias = aliasType?.referencedTypeAlias
+        referencedTypeAlias shouldNotBe null
+        referencedTypeAlias?.referencedDeclarationContainer?.ownerReferencedClass?.getName() shouldBe
+            AUTOCLOSEABLE_TYPE_ALIAS_CLASS_NAME
     }
 
     private fun assertNoUnresolvedKotlinTypeReferences(programClassPool: ClassPool) {

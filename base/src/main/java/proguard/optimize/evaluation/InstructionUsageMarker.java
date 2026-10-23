@@ -580,8 +580,8 @@ implements   AttributeVisitor
                   ConstantVisitor,
                   MemberVisitor
     {
-        private int  parameterSize;
-        private long usedParameters;
+        private ProgramClass  programClass;
+        private ProgramMethod programMethod;
 
 
         // Implementations for InstructionVisitor.
@@ -598,29 +598,41 @@ implements   AttributeVisitor
                 case Instruction.OP_INVOKESTATIC:
                 case Instruction.OP_INVOKEINTERFACE:
                 {
-                    parameterSize = 0;
+                    programClass  = null;
+                    programMethod = null;
                     clazz.constantPoolEntryAccept(constantInstruction.constantIndex, this);
 
-                    // Mark unused parameters.
-                    for (int index = 0; index < parameterSize; index++)
+                    if (programMethod == null)
                     {
-                        if (index < 64 &&
-                            (usedParameters & (1L << index)) == 0L)
+                        break;
+                    }
+
+                    TracedStack stack = partialEvaluator.getStackBefore(offset);
+                    boolean isStatic = (programMethod.getAccessFlags() & AccessConstants.STATIC) != 0;
+                    InternalTypeEnumeration parameterTypes =
+                        new InternalTypeEnumeration(programMethod.getDescriptor(programClass));
+                    int parameterOffset = isStatic ? 0 : 1;
+                    int stackIndex = stack.size() - parameterTypes.typeCount() - (isStatic ? 0 : 1);
+
+                    while (parameterTypes.hasMoreTypes())
+                    {
+                        String parameterType = parameterTypes.nextType();
+
+                        if (parameterOffset < 64 &&
+                            !ParameterUsageMarker.isParameterUsed(programMethod, parameterOffset))
                         {
-                            TracedStack stack =
-                                partialEvaluator.getStackBefore(offset);
-
-                            int stackIndex = stack.size() - parameterSize + index;
-
-                            logger.debug("  [{}] Ignoring parameter #{} (stack entry #{} [{}])",
-                                    offset,
-                                    index,
-                                    stackIndex,
-                                    stack.getBottom(stackIndex));
+                            logger.debug("  [{}] Ignoring parameter at v{} (stack entry #{} [{}])",
+                                         offset,
+                                         parameterOffset,
+                                         stackIndex,
+                                         stack.getBottom(stackIndex));
                             logger.debug("    Full stack: {}", stack);
 
                             markStackEntryUnwantedBefore(offset, stackIndex);
                         }
+
+                        parameterOffset += ClassUtil.internalTypeSize(parameterType);
+                        stackIndex++;
                     }
                     break;
                 }
@@ -643,10 +655,8 @@ implements   AttributeVisitor
 
         public void visitProgramMethod(ProgramClass programClass, ProgramMethod programMethod)
         {
-            // Get the total size of the parameters and the mask of the used
-            // parameters.
-            parameterSize  = ParameterUsageMarker.getParameterSize(programMethod);
-            usedParameters = ParameterUsageMarker.getUsedParameters(programMethod);
+            this.programClass  = programClass;
+            this.programMethod = programMethod;
         }
     }
 
