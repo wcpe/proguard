@@ -31,8 +31,10 @@ import java.util.*;
  *
  * @author Eric Lafortune
  */
-public class Configuration
+public class Configuration implements java.io.Serializable
 {
+    private static final long serialVersionUID = 1L;
+
     public static final File STD_OUT = new File("");
 
 

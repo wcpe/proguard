@@ -39,8 +39,10 @@ import java.util.List;
  *
  * @author Eric Lafortune
  */
-public class ClassPathEntry
+public class ClassPathEntry implements java.io.Serializable
 {
+    private static final long serialVersionUID = 1L;
+
     private File            file;
     private boolean         output;
     private String          featureName;

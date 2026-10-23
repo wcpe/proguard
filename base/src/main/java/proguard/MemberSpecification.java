@@ -28,8 +28,10 @@ import java.util.List;
  *
  * @author Eric Lafortune
  */
-public class MemberSpecification
+public class MemberSpecification implements java.io.Serializable
 {
+    private static final long serialVersionUID = 1L;
+
     public       int    requiredSetAccessFlags;
     public       int    requiredUnsetAccessFlags;
     public final String annotationType;

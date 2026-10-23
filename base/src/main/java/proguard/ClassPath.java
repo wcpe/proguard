@@ -28,8 +28,10 @@ import java.util.*;
  *
  * @author Eric Lafortune
  */
-public class ClassPath
+public class ClassPath implements java.io.Serializable
 {
+    private static final long serialVersionUID = 1L;
+
     private final List classPathEntries = new ArrayList();
 
 

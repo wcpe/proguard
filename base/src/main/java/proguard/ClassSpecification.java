@@ -30,8 +30,10 @@ import java.util.*;
  *
  * @author Eric Lafortune
  */
-public class ClassSpecification implements Cloneable
+public class ClassSpecification implements Cloneable, java.io.Serializable
 {
+    private static final long serialVersionUID = 1L;
+
     public final String comments;
     public       String memberComments;
     public       int    requiredSetAccessFlags;
